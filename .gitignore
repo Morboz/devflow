@@ -1,0 +1,22 @@
+# Secrets / local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Devflow runtime artifacts (Sandbox clones, job scratch)
+/tmp/devflow-jobs/
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Build / logs
+dist/
+build/
+*.log
+.DS_Store
