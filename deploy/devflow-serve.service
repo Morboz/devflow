@@ -1,0 +1,25 @@
+# Systemd unit for the devflow webhook server.
+#
+# Install (once, on the server):
+#   sudo cp deploy/devflow-serve.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now devflow-serve
+#
+# Replace REPLACE_ME with the deploy account username. Ensure `pnpm` is on the
+# login shell PATH (e.g. `corepack enable`) — ExecStart uses bash -l for that.
+
+[Unit]
+Description=devflow webhook server (POST /webhook)
+After=network.target
+
+[Service]
+Type=simple
+User=REPLACE_ME
+WorkingDirectory=/home/REPLACE_ME/devflow
+EnvironmentFile=/home/REPLACE_ME/devflow/.env
+ExecStart=/bin/bash -lc 'pnpm serve'
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
