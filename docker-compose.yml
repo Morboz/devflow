@@ -4,7 +4,7 @@ services:
     container_name: devflow-db
     environment:
       POSTGRES_USER: devflow
-      POSTGRES_PASSWORD: devflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: devflow
     ports:
       - "5433:5432"

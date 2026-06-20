@@ -16,7 +16,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: devflow
-          POSTGRES_PASSWORD: devflow
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
           POSTGRES_DB: devflow
         ports: ["5432:5432"]
         options: >-
@@ -25,9 +25,9 @@ jobs:
           --health-timeout 2s
           --health-retries 20
     env:
-      DATABASE_URL: postgres://devflow:devflow@localhost:5432/devflow
-      DATABASE_URL_TEST: postgres://devflow:devflow@localhost:5432/devflow_test
-      DATABASE_URL_ADMIN: postgres://devflow:devflow@localhost:5432/postgres
+      DATABASE_URL: postgres://devflow:${{ secrets.DB_PASSWORD }}@localhost:5432/devflow
+      DATABASE_URL_TEST: postgres://devflow:${{ secrets.DB_PASSWORD }}@localhost:5432/devflow_test
+      DATABASE_URL_ADMIN: postgres://devflow:${{ secrets.DB_PASSWORD }}@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
