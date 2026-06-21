@@ -5,6 +5,9 @@ export type ClaimedJob = {
   stageRunId: number;
   stage: string;
   featureId: number;
+  repoOwner: string;
+  repoName: string;
+  issueNumber: number;
 };
 
 export type WorkerDeps = {
@@ -59,7 +62,10 @@ async function claimNext(
 
     const run = (
       await pool.query(
-        'SELECT stage, feature_id FROM stage_runs WHERE id = $1',
+        `SELECT s.stage, s.feature_id, f.repo_owner, f.repo_name, f.source_issue_number
+         FROM stage_runs s
+         JOIN features f ON f.id = s.feature_id
+         WHERE s.id = $1`,
         [row.stage_run_id],
       )
     ).rows[0];
@@ -70,6 +76,9 @@ async function claimNext(
       stageRunId: row.stage_run_id,
       stage: run.stage,
       featureId: run.feature_id,
+      repoOwner: run.repo_owner,
+      repoName: run.repo_name,
+      issueNumber: run.source_issue_number,
     };
   } catch (err) {
     await client.query('ROLLBACK').catch(() => undefined);
