@@ -63,11 +63,8 @@ jobs:
             set -euo pipefail
             REPO_DIR="${DEPLOY_REPO_DIR:-$HOME/devflow}"
             if [ ! -d "$REPO_DIR/.git" ]; then
-              echo "[bootstrap] cloning devflow into $REPO_DIR"
-              echo "[bootstrap] existing contents of $REPO_DIR (if any):"
-              ls -la "$REPO_DIR" 2>&1 || true
-              echo "[bootstrap] probing github.com reachability via ls-remote:"
-              git ls-remote --heads https://github.com/Morboz/devflow.git 2>&1 || echo "[bootstrap] ls-remote FAILED — network egress to github.com likely blocked"
-              git clone https://github.com/Morboz/devflow.git "$REPO_DIR" 2>&1 || { rc=$?; echo "[bootstrap] git clone FAILED rc=$rc"; exit $rc; }
+              # Merge stderr into stdout: drone-ssh can drop git's final stderr
+              # line, which makes a failed clone look like a bare "exit 1".
+              git clone https://github.com/Morboz/devflow.git "$REPO_DIR" 2>&1
             fi
             bash "$REPO_DIR/scripts/deploy.sh"
