@@ -51,5 +51,18 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script_stop: true
-          script: ./scripts/deploy.sh
+          # The SSH action runs this in the login home dir, NOT the repo, so the
+          # old `./scripts/deploy.sh` resolved to ~/scripts/deploy.sh and failed
+          # with exit 127. Resolve the repo explicitly instead. We also clone it
+          # on first run — deploy.sh assumes ~/devflow exists, which a fresh
+          # server does not. `set -euo pipefail` restores stop-on-first-error;
+          # the `script_stop` input that used to do this was removed from
+          # appleboy/ssh-action@v1 (it now logs an "unexpected input" warning and
+          # is silently ignored).
+          script: |
+            set -euo pipefail
+            REPO_DIR="${DEPLOY_REPO_DIR:-$HOME/devflow}"
+            if [ ! -d "$REPO_DIR/.git" ]; then
+              git clone https://github.com/Morboz/devflow.git "$REPO_DIR"
+            fi
+            bash "$REPO_DIR/scripts/deploy.sh"
