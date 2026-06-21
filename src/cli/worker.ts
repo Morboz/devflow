@@ -1,18 +1,51 @@
+import { Octokit } from 'octokit';
 import { loadConfig } from '../config.js';
 import { createPool } from '../db/pool.js';
+import { runClaudeHeadless } from '../execution/claude.js';
+import { OctokitGitHub } from '../github/client.js';
+import { getInstallationToken } from '../github/auth.js';
+import { sweepOrphanBranches } from '../worker/orphan-gc.js';
+import { executeStage } from '../worker/stage.js';
 import { processOnce, type ClaimedJob } from '../worker/worker.js';
 
 const config = loadConfig();
 const pool = createPool(config.databaseUrl);
 
-// Phase 0 skeleton Stage: a no-op. Real Stage logic (Refinement/Decomposition/
-// Implementation/Review) arrives Phase 1+. For now the worker proves the
-// claim → execute → done loop works end-to-end.
-const execute = async (job: ClaimedJob): Promise<void> => {
-  console.debug(`[worker] skeleton execute for job #${job.jobId} (stage: ${job.stage})`);
+const appCreds = {
+  appId: config.githubAppId,
+  privateKey: config.githubPrivateKey,
+  installationId: config.githubInstallationId,
 };
+const repo = { owner: config.repoOwner, name: config.repoName };
+
+// Real Stage execution wiring (D6–D9): token per Job, sandbox clone, Claude
+// headless with the provider key, progress comment.
+const execute = (job: ClaimedJob) =>
+  executeStage(job, {
+    getToken: () => getInstallationToken(appCreds),
+    ghFactory: (token) =>
+      new OctokitGitHub(new Octokit({ auth: `token ${token}` })),
+    cloneUrl: `https://github.com/${repo.owner}/${repo.name}`,
+    runClaude: (cwd) =>
+      runClaudeHeadless({
+        cwd,
+        prompt: 'List the files in this repository.',
+        timeoutMs: 600_000,
+        env: { ...process.env, ANTHROPIC_API_KEY: config.providerApiKey },
+      }),
+  });
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function sweepOrphans(): Promise<void> {
+  const token = await getInstallationToken(appCreds);
+  const gh = new OctokitGitHub(new Octokit({ auth: `token ${token}` }));
+  const deleted = await sweepOrphanBranches(gh, repo, { now: new Date() });
+  if (deleted.length) console.log('[gc] deleted orphan branches:', deleted);
+}
 
 console.log('devflow worker started');
+let lastSweep = Date.now();
 
 const shutdown = async () => {
   await pool.end();
@@ -21,7 +54,8 @@ const shutdown = async () => {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-// Reclaim-before-claim loop (ADR-0013/0018). processOnce handles one tick.
+// Reclaim-before-claim loop (ADR-0013/0018); orphan GC sweeps on a coarser timer.
+// eslint-disable-next-line no-constant-condition
 while (true) {
   try {
     const { ran } = await processOnce({
@@ -29,11 +63,14 @@ while (true) {
       leaseSeconds: config.leaseSeconds,
       execute,
     });
-    if (!ran) {
-      await new Promise((r) => setTimeout(r, config.pollIntervalMs));
+    if (!ran) await sleep(config.pollIntervalMs);
+
+    if (Date.now() - lastSweep > config.gcIntervalMs) {
+      lastSweep = Date.now();
+      await sweepOrphans();
     }
   } catch (err) {
     console.error('[worker] tick failed:', err);
-    await new Promise((r) => setTimeout(r, config.pollIntervalMs));
+    await sleep(config.pollIntervalMs);
   }
 }
