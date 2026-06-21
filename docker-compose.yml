@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16
+    container_name: devflow-db
+    environment:
+      POSTGRES_USER: devflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: devflow
+    ports:
+      - "5433:5432"
+    volumes:
+      - devflow-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devflow"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+volumes:
+  devflow-db:

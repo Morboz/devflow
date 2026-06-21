@@ -1,0 +1,29 @@
+{
+  "name": "devflow",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "GitHub App that drives a repository's development process through four Stages (Refinement → Decomposition → Implementation → Review).",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "migrate": "tsx src/cli/migrate.ts",
+    "serve": "tsx src/cli/serve.ts",
+    "worker": "tsx src/cli/worker.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "@types/pg": "^8.20.0",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "@octokit/webhooks": "^14.2.0",
+    "pg": "^8.22.0"
+  }
+}

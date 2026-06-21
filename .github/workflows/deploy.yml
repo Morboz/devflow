@@ -1,0 +1,55 @@
+name: deploy
+
+# Continuous deployment to the single VM. Self-contained: it re-runs the test
+# gate first so a direct push to main can never deploy red code, then SSHes in
+# and runs scripts/deploy.sh (pull → install → migrate → restart).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: devflow
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          POSTGRES_DB: devflow
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U devflow"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://devflow:${{ secrets.DB_PASSWORD }}@localhost:5432/devflow
+      DATABASE_URL_TEST: postgres://devflow:${{ secrets.DB_PASSWORD }}@localhost:5432/devflow_test
+      DATABASE_URL_ADMIN: postgres://devflow:${{ secrets.DB_PASSWORD }}@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          script: ./scripts/deploy.sh

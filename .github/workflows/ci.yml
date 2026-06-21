@@ -1,0 +1,41 @@
+name: ci
+
+# Test gate for every change that isn't a push to main (main is gated by
+# deploy.yml, which re-runs the same tests before deploying).
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: devflow
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          POSTGRES_DB: devflow
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U devflow"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://devflow:${{ secrets.DB_PASSWORD }}@localhost:5432/devflow
+      DATABASE_URL_TEST: postgres://devflow:${{ secrets.DB_PASSWORD }}@localhost:5432/devflow_test
+      DATABASE_URL_ADMIN: postgres://devflow:${{ secrets.DB_PASSWORD }}@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
