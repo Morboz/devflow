@@ -29,8 +29,8 @@ const commentEvent = (body: string, issueNumber = 42): WebhookEvent => ({
 });
 
 describe('handleEvent', () => {
-  it('posts a help reply inline for a bare @devflow mention (behavior #13)', async () => {
-    await handleEvent(commentEvent('@devflow'), { pool, postComment });
+  it('posts a help reply inline for a bare @mbzdevflow mention (behavior #13)', async () => {
+    await handleEvent(commentEvent('@mbzdevflow'), { pool, postComment });
 
     expect(postComment).toHaveBeenCalledTimes(1);
     expect(postComment).toHaveBeenCalledWith(
@@ -50,8 +50,8 @@ describe('handleEvent', () => {
     expect(jobs.rows[0]?.n).toBe(0);
   });
 
-  it('enqueues a job for @devflow /refine (behavior #11 core)', async () => {
-    const res = await handleEvent(commentEvent('@devflow /refine'), {
+  it('enqueues a job for @mbzdevflow /refine (behavior #11 core)', async () => {
+    const res = await handleEvent(commentEvent('@mbzdevflow /refine'), {
       pool,
       postComment,
     });

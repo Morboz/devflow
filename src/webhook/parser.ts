@@ -8,24 +8,39 @@ const COMMAND_TO_STAGE: Record<string, Stage> = {
   review: 'review',
 };
 
-// An explicit mention of the app followed by one of the four commands,
-// e.g. "@devflow /refine".
-const COMMAND_RE = /@devflow\s+\/(refine|decompose|implement|review)\b/i;
+/** Escape a string for literal interpolation into a RegExp. */
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-// A bare mention of the app with no command, e.g. "@devflow" (ADR-0001: reply
-// with the command list, enqueue nothing).
-const MENTION_RE = /@devflow\b/i;
+/**
+ * Build the command/mention regexes for the app's slug. Matches `@<slug>`
+ * optionally followed by `[bot]` — GitHub renders app mentions as
+ * `@<slug>[bot]`, but a typed-as-text `@<slug>` should also work, so both
+ * `@mbzdevflow /refine` and `@mbzdevflow[bot] /refine` trigger.
+ */
+function mentionRegexes(botSlug: string): { command: RegExp; mention: RegExp } {
+  const slug = escapeRe(botSlug);
+  return {
+    command: new RegExp(
+      `@${slug}(?:\\[bot\\])?\\s+\\/(refine|decompose|implement|review)\\b`,
+      'i',
+    ),
+    mention: new RegExp(`@${slug}(?:\\[bot\\])?\\b`, 'i'),
+  };
+}
 
 /** Resolve a slash command in a comment body to its Stage, or undefined. */
-function commandToStage(body: string): Stage | undefined {
-  const command = COMMAND_RE.exec(body)?.[1]?.toLowerCase();
+function commandToStage(body: string, commandRe: RegExp): Stage | undefined {
+  const command = commandRe.exec(body)?.[1]?.toLowerCase();
   return command ? COMMAND_TO_STAGE[command] : undefined;
 }
 
-export function parse(event: WebhookEvent): ParseResult {
+export function parse(event: WebhookEvent, botSlug = 'mbzdevflow'): ParseResult {
+  const { command: commandRe, mention: mentionRe } = mentionRegexes(botSlug);
   if (event.type === 'issue_comment') {
     const body = event.comment.body;
-    const stage = commandToStage(body);
+    const stage = commandToStage(body, commandRe);
     if (stage) {
       return {
         kind: 'trigger',
@@ -41,7 +56,7 @@ export function parse(event: WebhookEvent): ParseResult {
       };
     }
 
-    if (MENTION_RE.test(body)) {
+    if (mentionRe.test(body)) {
       return {
         kind: 'help',
         replyTo: { repo: event.repo, issueNumber: event.issue.number },

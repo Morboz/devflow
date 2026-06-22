@@ -3,13 +3,13 @@ import { parse } from '../src/webhook/parser.js';
 import type { WebhookEvent } from '../src/domain/types.js';
 
 describe('parser', () => {
-  it('parses @devflow /refine on an issue comment into a refinement Trigger', () => {
+  it('parses @mbzdevflow /refine on an issue comment into a refinement Trigger', () => {
     const event: WebhookEvent = {
       type: 'issue_comment',
       action: 'created',
       repo: { owner: 'Morboz', name: 'devflow' },
       issue: { number: 42, isPullRequest: false },
-      comment: { id: 999, body: '@devflow /refine' },
+      comment: { id: 999, body: '@mbzdevflow /refine' },
     };
 
     const result = parse(event);
@@ -32,13 +32,13 @@ describe('parser', () => {
     ['decompose', 'decomposition'],
     ['implement', 'implementation'],
     ['review', 'review'],
-  ] as const)('parses @devflow /%s into a %s Trigger', (command, stage) => {
+  ] as const)('parses @mbzdevflow /%s into a %s Trigger', (command, stage) => {
     const event: WebhookEvent = {
       type: 'issue_comment',
       action: 'created',
       repo: { owner: 'Morboz', name: 'devflow' },
       issue: { number: 7, isPullRequest: false },
-      comment: { id: 100, body: `@devflow /${command}` },
+      comment: { id: 100, body: `@mbzdevflow /${command}` },
     };
 
     expect(parse(event)).toEqual({
@@ -55,13 +55,13 @@ describe('parser', () => {
     });
   });
 
-  it('targets a pr when @devflow /review is on a pull request comment', () => {
+  it('targets a pr when @mbzdevflow /review is on a pull request comment', () => {
     const event: WebhookEvent = {
       type: 'issue_comment',
       action: 'created',
       repo: { owner: 'Morboz', name: 'devflow' },
       issue: { number: 12, isPullRequest: true },
-      comment: { id: 200, body: '@devflow /review' },
+      comment: { id: 200, body: '@mbzdevflow /review' },
     };
 
     const result = parse(event);
@@ -80,13 +80,13 @@ describe('parser', () => {
     });
   });
 
-  it('replies with help when @devflow is mentioned with no command', () => {
+  it('replies with help when @mbzdevflow is mentioned with no command', () => {
     const event: WebhookEvent = {
       type: 'issue_comment',
       action: 'created',
       repo: { owner: 'Morboz', name: 'devflow' },
       issue: { number: 30, isPullRequest: false },
-      comment: { id: 300, body: '@devflow' },
+      comment: { id: 300, body: '@mbzdevflow' },
     };
 
     expect(parse(event)).toEqual({
@@ -95,7 +95,7 @@ describe('parser', () => {
     });
   });
 
-  it('ignores a comment that does not mention @devflow', () => {
+  it('ignores a comment that does not mention @mbzdevflow', () => {
     const event: WebhookEvent = {
       type: 'issue_comment',
       action: 'created',
@@ -138,5 +138,51 @@ describe('parser', () => {
     };
 
     expect(parse(event)).toEqual({ kind: 'ignore' });
+  });
+
+  it('also triggers when GitHub renders the mention as @<slug>[bot]', () => {
+    const event: WebhookEvent = {
+      type: 'issue_comment',
+      action: 'created',
+      repo: { owner: 'Morboz', name: 'devflow' },
+      issue: { number: 77, isPullRequest: false },
+      comment: { id: 500, body: '@mbzdevflow[bot] /refine' },
+    };
+
+    expect(parse(event)).toEqual({
+      kind: 'trigger',
+      trigger: {
+        stage: 'refinement',
+        target: {
+          kind: 'issue',
+          number: 77,
+          repo: { owner: 'Morboz', name: 'devflow' },
+        },
+        triggerKey: 'comment:500',
+      },
+    });
+  });
+
+  it('honors a custom slug passed to parse', () => {
+    const event: WebhookEvent = {
+      type: 'issue_comment',
+      action: 'created',
+      repo: { owner: 'Morboz', name: 'devflow' },
+      issue: { number: 88, isPullRequest: false },
+      comment: { id: 600, body: '@mybot /refine' },
+    };
+
+    expect(parse(event, 'mybot')).toEqual({
+      kind: 'trigger',
+      trigger: {
+        stage: 'refinement',
+        target: {
+          kind: 'issue',
+          number: 88,
+          repo: { owner: 'Morboz', name: 'devflow' },
+        },
+        triggerKey: 'comment:600',
+      },
+    });
   });
 });

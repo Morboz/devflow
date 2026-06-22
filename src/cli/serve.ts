@@ -23,7 +23,11 @@ const postComment = async (ref: CommentRef, body: string): Promise<void> => {
   await gh.createIssueComment(ref.repo.owner, ref.repo.name, ref.issueNumber, body);
 };
 
-const server = createWebhookServer(config.webhookSecret, { pool, postComment });
+const server = createWebhookServer(config.webhookSecret, {
+  pool,
+  postComment,
+  botSlug: config.githubAppSlug,
+});
 server.listen(config.port, () => {
   console.log(`devflow webhook server listening on :${config.port}/webhook`);
 });

@@ -17,6 +17,8 @@ export type HandlerDeps = {
   pool: Pool;
   /** Post a comment on an issue/PR (the GitHub boundary). */
   postComment: (ref: CommentRef, body: string) => Promise<void>;
+  /** GitHub App slug for @<slug> command mentions. Defaults to 'mbzdevflow'. */
+  botSlug?: string;
 };
 
 export type HandlerResult = { status: number };
@@ -30,7 +32,7 @@ export async function handleEvent(
   event: WebhookEvent,
   deps: HandlerDeps,
 ): Promise<HandlerResult> {
-  const result = parse(event);
+  const result = parse(event, deps.botSlug);
   switch (result.kind) {
     case 'ignore':
       return { status: 200 };
