@@ -57,7 +57,7 @@ const issueCommentPayload = {
   action: 'created',
   repository: { owner: { login: 'Morboz' }, name: 'devflow' },
   issue: { number: 42 },
-  comment: { id: 999, body: '@devflow /refine' },
+  comment: { id: 999, body: '@mbzdevflow /refine' },
 };
 
 describe('webhook endpoint', () => {

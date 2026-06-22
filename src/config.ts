@@ -13,6 +13,8 @@ export interface Config {
   providerBaseUrl?: string;
   repoOwner: string;
   repoName: string;
+  /** GitHub App slug used for @<slug> command mentions (e.g. @mbzdevflow[bot]). */
+  githubAppSlug: string;
 }
 
 function required(name: string): string {
@@ -42,5 +44,6 @@ export function loadConfig(): Config {
     providerBaseUrl: process.env.DEVFLOW_PROVIDER_BASE_URL || undefined,
     repoOwner: required('DEVFLOW_REPO_OWNER'),
     repoName: required('DEVFLOW_REPO_NAME'),
+    githubAppSlug: process.env.DEVFLOW_GITHUB_APP_SLUG ?? 'mbzdevflow',
   };
 }
