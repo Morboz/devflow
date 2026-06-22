@@ -5,7 +5,9 @@ import { promisify } from 'node:util';
 
 const execFileP = promisify(execFile);
 
-export type Sandbox = { path: string };
+export type SandboxMode = 'readonly' | 'writable';
+
+export type Sandbox = { path: string; mode: SandboxMode };
 
 export const DEFAULT_SANDBOX_BASE = '/tmp/devflow-jobs';
 
@@ -29,13 +31,26 @@ export function cloneAuthHeader(token: string): string {
  * (--depth=50) of the target repo under <baseDir>/<jobId> (ADR-0006).
  * Clone authenticates with the installation token via a one-shot http header,
  * not a persisted PAT and not a token-bearing URL.
+ *
+ * `mode` declares the sandbox's intent (issue #5 / D6): `readonly` (default —
+ * Stages that never push: Refinement/Decomposition/Review) or `writable`
+ * (Implementation — may push a `devflow/*` branch). Only a writable sandbox
+ * can {@link pushBranch}; read-only sandboxes carry no push capability. Phase 0
+ * proves both modes are possible; no Stage wires them in yet.
  */
 export async function createSandbox(
   jobId: number,
-  opts: { cloneUrl: string; token?: string; baseDir?: string; depth?: number },
+  opts: {
+    cloneUrl: string;
+    token?: string;
+    baseDir?: string;
+    depth?: number;
+    mode?: SandboxMode;
+  },
 ): Promise<Sandbox> {
   const baseDir = opts.baseDir ?? DEFAULT_SANDBOX_BASE;
   const depth = opts.depth ?? 50;
+  const mode: SandboxMode = opts.mode ?? 'readonly';
   const path = join(baseDir, String(jobId));
 
   await mkdir(baseDir, { recursive: true });
@@ -50,7 +65,55 @@ export async function createSandbox(
   }
   await execFileP('git', args);
 
-  return { path };
+  return { path, mode };
+}
+
+/**
+ * Make the sandbox's current HEAD available on origin as a `devflow/*` branch
+ * (ADR-0006). Implementation Stages commit in the sandbox, then call this to
+ * land the work on a feature branch; Phase 0 uses it only to prove writable
+ * mode (issue #5 criterion 6).
+ *
+ * Auth is re-supplied here, not inherited from the clone: `createSandbox` used
+ * a one-shot `-c http.extraHeader`, so the cloned `.git/config` holds a clean,
+ * tokenless `remote.origin.url` and a bare `git push` would 401. Re-applying
+ * the same header shape keeps the token in process memory only (ADR-0008) and
+ * is written to `.git/config` nowhere.
+ *
+ * Enforces two invariants:
+ * - the sandbox must be `writable` (read-only sandboxes have no push path);
+ * - the branch must be a `devflow/*` ref — never push to main or another
+ *   protected branch (ADR-0006).
+ */
+export async function pushBranch(
+  sandbox: Sandbox,
+  opts: { token: string; branch: string },
+): Promise<void> {
+  if (sandbox.mode !== 'writable') {
+    throw new Error(
+      `pushBranch requires a writable sandbox (got '${sandbox.mode}'); create the sandbox with mode: 'writable'`,
+    );
+  }
+  if (!opts.branch.startsWith('devflow/')) {
+    throw new Error(
+      `pushBranch target must be a 'devflow/*' branch (got '${opts.branch}'); ADR-0006 forbids pushing non-feature refs`,
+    );
+  }
+
+  // Create the branch ref from current HEAD without disturbing the working
+  // tree (the caller has already committed the work it wants to push).
+  await execFileP('git', ['-C', sandbox.path, 'branch', opts.branch]);
+
+  // Push with a one-shot auth header — runtime config, not written to disk.
+  await execFileP('git', [
+    '-C',
+    sandbox.path,
+    '-c',
+    `http.extraHeader=${cloneAuthHeader(opts.token)}`,
+    'push',
+    'origin',
+    opts.branch,
+  ]);
 }
 
 /** Delete the sandbox directory (success or failure). */
