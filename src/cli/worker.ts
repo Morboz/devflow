@@ -31,7 +31,13 @@ const execute = (job: ClaimedJob) =>
         cwd,
         prompt: 'List the files in this repository.',
         timeoutMs: 600_000,
-        env: { ...process.env, ANTHROPIC_API_KEY: config.providerApiKey },
+        env: {
+          ...process.env,
+          ANTHROPIC_API_KEY: config.providerApiKey,
+          ...(config.providerBaseUrl && {
+            ANTHROPIC_BASE_URL: config.providerBaseUrl,
+          }),
+        },
       }),
   });
 

@@ -10,6 +10,7 @@ export interface Config {
   githubInstallationId: number;
   providerModel: string;
   providerApiKey: string;
+  providerBaseUrl?: string;
   repoOwner: string;
   repoName: string;
 }
@@ -38,6 +39,7 @@ export function loadConfig(): Config {
     githubInstallationId: Number(required('GITHUB_INSTALLATION_ID')),
     providerModel: required('DEVFLOW_PROVIDER_MODEL'),
     providerApiKey: required('DEVFLOW_PROVIDER_API_KEY'),
+    providerBaseUrl: process.env.DEVFLOW_PROVIDER_BASE_URL || undefined,
     repoOwner: required('DEVFLOW_REPO_OWNER'),
     repoName: required('DEVFLOW_REPO_NAME'),
   };

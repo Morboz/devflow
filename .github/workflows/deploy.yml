@@ -47,18 +47,23 @@ jobs:
     steps:
       - name: SSH deploy
         uses: appleboy/ssh-action@v1
+        env:
+          # Variables (non-secret): repo config + provider endpoint/model.
+          DEVFLOW_APP_ID:            ${{ vars.DEVFLOW_APP_ID }}
+          DEVFLOW_PROVIDER_BASE_URL: ${{ vars.DEVFLOW_PROVIDER_BASE_URL }}
+          DEVFLOW_PROVIDER_MODEL:    ${{ vars.DEVFLOW_PROVIDER_MODEL }}
+          DEVFLOW_REPO_OWNER:        ${{ vars.DEVFLOW_REPO_OWNER }}
+          DEVFLOW_REPO_NAME:         ${{ vars.DEVFLOW_REPO_NAME }}
+          DEVFLOW_PEM_PATH:          ${{ vars.DEVFLOW_PEM_PATH }}
+          # Secrets (sensitive): GitHub App installation id + provider key.
+          DEVFLOW_APP_INSTALLATION_ID: ${{ secrets.DEVFLOW_APP_INSTALLATION_ID }}
+          DEVFLOW_PROVIDER_API_KEY:    ${{ secrets.DEVFLOW_PROVIDER_API_KEY }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          # The SSH action runs this in the login home dir, NOT the repo, so the
-          # old `./scripts/deploy.sh` resolved to ~/scripts/deploy.sh and failed
-          # with exit 127. Resolve the repo explicitly instead. We also clone it
-          # on first run — deploy.sh assumes ~/devflow exists, which a fresh
-          # server does not. `set -euo pipefail` restores stop-on-first-error;
-          # the `script_stop` input that used to do this was removed from
-          # appleboy/ssh-action@v1 (it now logs an "unexpected input" warning and
-          # is silently ignored).
+          # Forwarded to the remote shell's env; deploy.sh writes them into .env.
+          envs: DEVFLOW_APP_ID,DEVFLOW_APP_INSTALLATION_ID,DEVFLOW_PROVIDER_API_KEY,DEVFLOW_PROVIDER_BASE_URL,DEVFLOW_PROVIDER_MODEL,DEVFLOW_REPO_OWNER,DEVFLOW_REPO_NAME,DEVFLOW_PEM_PATH
           script: |
             set -euo pipefail
             REPO_DIR="${DEPLOY_REPO_DIR:-$HOME/devflow}"
@@ -66,5 +71,11 @@ jobs:
               # Merge stderr into stdout: drone-ssh can drop git's final stderr
               # line, which makes a failed clone look like a bare "exit 1".
               git clone https://github.com/Morboz/devflow.git "$REPO_DIR" 2>&1
+            else
+              # Sync before running deploy.sh: a push that changes deploy.sh
+              # itself must execute the NEW version on this run, not the stale
+              # one already on disk.
+              git -C "$REPO_DIR" fetch --all --prune
+              git -C "$REPO_DIR" reset --hard origin/main
             fi
             bash "$REPO_DIR/scripts/deploy.sh"
