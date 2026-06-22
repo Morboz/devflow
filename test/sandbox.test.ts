@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createSandbox, removeSandbox, withToken } from '../src/worker/sandbox.js';
+import { cloneAuthHeader, createSandbox, removeSandbox } from '../src/worker/sandbox.js';
 
 const exec = promisify(execFile);
 
@@ -48,9 +48,29 @@ describe('sandbox', () => {
     await expect(access(sb.path)).rejects.toThrow();
   });
 
-  it('embeds the installation token in an HTTPS clone URL (pure)', () => {
-    expect(withToken('https://github.com/Morboz/devflow', 'tok_123')).toBe(
-      'https://x-access-token:tok_123@github.com/Morboz/devflow',
+  it('builds a Basic auth http.extraHeader carrying the token (pure)', () => {
+    const header = cloneAuthHeader('tok_123');
+    expect(header.startsWith('Authorization: Basic ')).toBe(true);
+    // The credential is base64('x-access-token:<token>'): assert it round-trips
+    // back to the x-access-token form rather than pinning a base64 literal.
+    const cred = header.slice('Authorization: Basic '.length);
+    expect(Buffer.from(cred, 'base64').toString('utf8')).toBe(
+      'x-access-token:tok_123',
     );
+  });
+
+  it('does not write the installation token into the sandbox .git/config (D7/issue #4)', async () => {
+    const token = 'secret_install_token_value';
+    const sb = await createSandbox(789, {
+      cloneUrl: source,
+      baseDir,
+      depth: 1,
+      token,
+    });
+
+    const config = await readFile(join(sb.path, '.git', 'config'), 'utf8');
+    // The clean URL is recorded; the token must never appear on disk.
+    expect(config).not.toContain(token);
+    expect(config).not.toContain('x-access-token');
   });
 });

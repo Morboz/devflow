@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "migrate": "tsx src/cli/migrate.ts",
     "serve": "tsx src/cli/serve.ts",
-    "worker": "tsx src/cli/worker.ts"
+    "worker": "tsx src/cli/worker.ts",
+    "smoke:auth": "tsx src/cli/smoke-auth.ts"
   },
   "engines": {
     "node": ">=20"
