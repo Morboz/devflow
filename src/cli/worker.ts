@@ -1,7 +1,7 @@
 import { Octokit } from 'octokit';
 import { loadConfig } from '../config.js';
 import { createPool } from '../db/pool.js';
-import { runClaudeHeadless } from '../execution/claude.js';
+import { claudeRunner, SKELETON_PROMPT } from '../execution/claude.js';
 import { OctokitGitHub } from '../github/client.js';
 import { getInstallationToken } from '../github/auth.js';
 import { sweepOrphanBranches } from '../worker/orphan-gc.js';
@@ -19,27 +19,22 @@ const appCreds = {
 const repo = { owner: config.repoOwner, name: config.repoName };
 
 // Real Stage execution wiring (D6–D9): token per Job, sandbox clone, Claude
-// headless with the provider key, progress comment.
+// headless with the Provider Config on the env, progress comment. The
+// runClaude dep is built by claudeRunner — shared with the smoke test — so the
+// provider-config → env mapping lives in one place (issue #6 criterion 2).
 const execute = (job: ClaimedJob) =>
   executeStage(job, {
     getToken: () => getInstallationToken(appCreds),
     ghFactory: (token) =>
       new OctokitGitHub(new Octokit({ auth: `token ${token}` })),
     cloneUrl: `https://github.com/${repo.owner}/${repo.name}`,
-    runClaude: (cwd) =>
-      runClaudeHeadless({
-        cwd,
-        prompt: 'List the files in this repository.',
-        timeoutMs: 600_000,
-        env: {
-          ...process.env,
-          ANTHROPIC_API_KEY: config.providerApiKey,
-          ANTHROPIC_MODEL: config.providerModel,
-          ...(config.providerBaseUrl && {
-            ANTHROPIC_BASE_URL: config.providerBaseUrl,
-          }),
-        },
-      }),
+    runClaude: claudeRunner({
+      prompt: SKELETON_PROMPT,
+      providerModel: config.providerModel,
+      providerApiKey: config.providerApiKey,
+      providerBaseUrl: config.providerBaseUrl,
+      timeoutMs: 600_000,
+    }),
   });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

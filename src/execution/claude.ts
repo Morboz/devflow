@@ -82,3 +82,67 @@ export async function runClaudeHeadless(opts: {
     env: opts.env,
   });
 }
+
+/**
+ * Phase-0 skeleton prompt (D8): trivial, and it references the sandbox (the
+ * cloned repo) so the end-to-end smoke test can assert the captured output is
+ * about the sandbox contents — not Stage prompt engineering (that is Phase 1+).
+ */
+export const SKELETON_PROMPT = 'List the files in this repository.';
+
+/** Provider Config held directly, no abstraction layer (ADR-0009). */
+export type ProviderConfig = {
+  providerModel: string;
+  providerApiKey: string;
+  providerBaseUrl?: string;
+};
+
+/**
+ * Build the env for a headless Claude Code subprocess from the Provider Config
+ * (ADR-0009 / issue #6 criterion 2 — model and key read from config, not
+ * hardcoded). Claude Code reads all three from its environment, so the headless
+ * invocation needs no flags beyond `-p <prompt>`:
+ * - `ANTHROPIC_API_KEY` — auth;
+ * - `ANTHROPIC_MODEL` — which model to run;
+ * - `ANTHROPIC_BASE_URL` — a non-official Anthropic-compatible endpoint (e.g.
+ *   Zhipu BigModel); omitted for the official API.
+ */
+export function claudeEnv(
+  provider: ProviderConfig,
+  base: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  return {
+    ...base,
+    ANTHROPIC_API_KEY: provider.providerApiKey,
+    ANTHROPIC_MODEL: provider.providerModel,
+    ...(provider.providerBaseUrl
+      ? { ANTHROPIC_BASE_URL: provider.providerBaseUrl }
+      : {}),
+  };
+}
+
+/**
+ * Build the `runClaude` dependency {@link executeStage} expects: a closure that
+ * invokes Claude Code headless in a sandbox cwd with the Provider Config on the
+ * env. Centralizes the provider-config → env → subprocess wiring (previously
+ * inlined in the CLI entrypoint) so the worker and the end-to-end smoke test
+ * share one path. `command`/`baseEnv` are injectable so the wiring is testable
+ * without the real `claude` binary or an API key (ADR-0020).
+ */
+export function claudeRunner(
+  opts: ProviderConfig & {
+    prompt: string;
+    timeoutMs?: number;
+    command?: string;
+    baseEnv?: NodeJS.ProcessEnv;
+  },
+): (cwd: string) => Promise<{ stdout: string }> {
+  return (cwd) =>
+    runClaudeHeadless({
+      cwd,
+      prompt: opts.prompt,
+      timeoutMs: opts.timeoutMs,
+      command: opts.command,
+      env: claudeEnv(opts, opts.baseEnv),
+    });
+}
