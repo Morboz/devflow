@@ -13,16 +13,19 @@ REPO_DIR="${DEPLOY_REPO_DIR:-$HOME/devflow}"
 cd "$REPO_DIR"
 
 ENV_FILE="./.env"
-touch "$ENV_FILE"
-chmod 600 "$ENV_FILE"
+# Build .env in a temp file in the same directory, then atomically rename it
+# into place. This rebuilds .env fresh every deploy — never half-written, and
+# avoids orphan lines: sed-deleting only the first GITHUB_PRIVATE_KEY line
+# would leave the multi-line PEM body behind, which bash then tries to execute
+# (exit 127). Same-directory temp so the final mv is an atomic rename.
+ENV_TMP="$(mktemp ./.env.tmp.XXXXXX)"
+chmod 600 "$ENV_TMP"
+trap 'rm -f "$ENV_TMP"' EXIT
 
-# Write/overwrite a single KEY=value line in $ENV_FILE (value written verbatim —
-# quote multi-line values yourself). A prior assignment for the same key, if
-# any, is removed first.
+# Append a KEY=value line to the temp .env (value verbatim; quote multi-line
+# values yourself).
 set_env() {
-  local key="$1" val="$2"
-  sed -i "/^${key}=/d" "$ENV_FILE"   # no-op if the key is absent
-  printf '%s=%s\n' "$key" "$val" >> "$ENV_FILE"
+  printf '%s=%s\n' "$1" "$2" >> "$ENV_TMP"
 }
 
 # --- Render .env fully from GitHub-provided values.
@@ -56,6 +59,10 @@ PEM_PATH="${DEVFLOW_PEM_PATH:-$HOME/mbzdevflow.2026-06-19.private-key.pem}"
 [ -f "$PEM_PATH" ] || { echo "PEM not found at $PEM_PATH (set DEVFLOW_PEM_PATH)" >&2; exit 1; }
 PEM_BODY="$(<"$PEM_PATH")"
 set_env GITHUB_PRIVATE_KEY "\"$PEM_BODY\""
+
+# Atomically replace .env with the freshly rendered temp.
+mv "$ENV_TMP" "$ENV_FILE"
+chmod 600 "$ENV_FILE"
 
 # --- Build / migrate. Export .env so pnpm migrate sees DATABASE_URL etc.
 set -o allexport
