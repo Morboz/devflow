@@ -34,6 +34,7 @@ const execute = (job: ClaimedJob) =>
         env: {
           ...process.env,
           ANTHROPIC_API_KEY: config.providerApiKey,
+          ANTHROPIC_MODEL: config.providerModel,
           ...(config.providerBaseUrl && {
             ANTHROPIC_BASE_URL: config.providerBaseUrl,
           }),
