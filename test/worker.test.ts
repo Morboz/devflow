@@ -97,4 +97,24 @@ describe('worker', () => {
     expect(result.ran).toBe(false);
     expect(execute).not.toHaveBeenCalled();
   });
+
+  it('reclaiming an expired lease frees the exclusivity slot for a new trigger (S5 AC2+AC3)', async () => {
+    // Trigger occupies the (feature, refinement) slot, then the worker "crashes"
+    // mid-job: the job is left running with an already-expired lease.
+    const first = await enqueue(pool, refineTrigger(42, 999));
+    if (first.outcome !== 'enqueued') throw new Error('unreachable');
+    await pool.query(
+      `UPDATE jobs SET status = 'running', lease_expires_at = now() - interval '5 seconds'
+       WHERE stage_run_id = $1`,
+      [first.stageRunId],
+    );
+
+    // The next tick reclaims the expired lease -> job + run go 'failed' (terminal).
+    expect(await reclaimExpiredLeases(pool)).toBe(1);
+
+    // A fresh explicit re-trigger (new comment id => new trigger_key, ADR-0007)
+    // now succeeds: the slot was freed, so the system is not permanently stuck.
+    const retry = await enqueue(pool, refineTrigger(42, 1000));
+    expect(retry.outcome).toBe('enqueued');
+  });
 });

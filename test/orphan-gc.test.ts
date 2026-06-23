@@ -33,6 +33,9 @@ describe('orphan GC', () => {
     expect(shouldDeleteBranch({ name: 'devflow/x-1', prCount: 0, ageHours: 25 })).toBe(true);
     expect(shouldDeleteBranch({ name: 'devflow/x-1', prCount: 0, ageHours: 5 })).toBe(false); // too fresh
     expect(shouldDeleteBranch({ name: 'devflow/x-1', prCount: 1, ageHours: 25 })).toBe(false); // has PR
+    // An open OR closed PR both surface as prCount >= 1 from the client's
+    // `state: 'all'` query (ADR-0007) — either keeps the branch (S5 AC5).
+    expect(shouldDeleteBranch({ name: 'devflow/x-1', prCount: 2, ageHours: 25 })).toBe(false);
     expect(shouldDeleteBranch({ name: 'main', prCount: 0, ageHours: 25 })).toBe(false); // not devflow/
   });
 

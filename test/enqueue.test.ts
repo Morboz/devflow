@@ -84,4 +84,18 @@ describe('enqueue', () => {
     const runs = await pool.query('SELECT count(*)::int AS n FROM stage_runs');
     expect(runs.rows[0]?.n).toBe(1);
   });
+
+  it('also rejects while a run is awaiting_plan_approval — both non-terminals (S5 AC2)', async () => {
+    const first = await enqueue(pool, refineTrigger(42, 999));
+    if (first.outcome !== 'enqueued') throw new Error('unreachable');
+    // Move the run into the other non-terminal state the exclusivity index covers.
+    await pool.query(
+      `UPDATE stage_runs SET status = 'awaiting_plan_approval' WHERE id = $1`,
+      [first.stageRunId],
+    );
+
+    // A fresh trigger (new trigger_key) for the same (feature, stage) is still blocked.
+    const second = await enqueue(pool, refineTrigger(42, 1000));
+    expect(second).toEqual({ outcome: 'rejected', reason: 'stage_in_progress' });
+  });
 });
